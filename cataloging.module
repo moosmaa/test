@@ -364,7 +364,7 @@ function cataloging_filtering()
 }
 function cataloging_filtering_ajax($externalProjectsOnly=false,$selectedProjects='',$checkedFilters='')
 {
-    $checkedFilters = str_replace('my_forward_slash', '/', $checkedFilters);
+    $checkedFilters = str_replace(array('my_forward_slash'), array('/'), $checkedFilters);
     $lat_long = cataloging_create_lat_long_array();
     if($selectedProjects=='')
     {
@@ -403,6 +403,7 @@ function cataloging_filtering_ajax($externalProjectsOnly=false,$selectedProjects
     if($checkedFilters!='')
     {
         $checkedFilters = explode(",",$checkedFilters);
+        $checkedFilters = str_replace('my_comma', ',', $checkedFilters);
         
         foreach($checkedFilters as $pid__checkBoxName)
         {
@@ -1576,7 +1577,7 @@ function cataloging_createFilters($projectsArray,$ajax=TRUE)
                 'X-Ray' => 'imaging_instrumentation___7=1 OR imaging_instrumentation___29=1',
                 'Human imaging' => 'imaging_instrumentation___0=1',
                 'Animal imaging' => 'imaging_type___1=1 OR imaging_type___2=1 OR imaging_type___3=1',
-                '≥ 7T or ≥ $500K instrumentation' => 'imaging_ultra_hei_present=1',
+                '&ge; 7T or &ge; $500K instrumentation' => 'imaging_ultra_hei_present=1',
             ),          
         ),
         '319'=>array(
@@ -1584,8 +1585,88 @@ function cataloging_createFilters($projectsArray,$ajax=TRUE)
               )
         ),
         '258'=>array(
-              'filters'=>array(
-              )
+            'filters'=>array(
+                'Animal imaging' => 'hei_type1=0',
+                'Crystallography' => 'hei_type1=1',
+                'Flow cytometry' => 'hei_type1=9',
+                'Genomics' => 'hei_type1=2',
+                'High performance computing' => 'hei_type1=7',
+                'High-throughput screening' => 'hei_type1=2',
+                'Human imaging' => 'hei_type1=4',
+                'Microscopy' => 'hei_type1=5',
+                'Molecular imaging' => 'hei_type1=8',
+                'Radiotracer production' => 'hei_type1=10',
+                'Spectrometry' => 'hei_type1=6',
+            )
+        ),
+        '295'=>array(
+            'filters'=>array(
+                'Nanotech core facilities available' => 'nanotech_cores1=1',
+                'Nanomedicine/bionanotechnology focus' => 'nanotech_focus1=1',
+                'Materials Research Science and Engineering Center' => 'nanotech_nsf1=0',
+                'Nanoscale Science and Engineering Center' => 'nanotech_nsf1=1',
+                'National Nanotechnology Infrastructure Network' => 'nanotech_nsf1=2',
+                'NSF Center for Chemical Innovation Program' => 'nanotech_nsf1=3',
+                'NSF Nanotechnology Center' => 'nanotech_nsf1=4',
+                'NSF Science and Technology Center' => 'nanotech_nsf1=5 OR nanotech_nsf1=6',
+                'NCI Center of Cancer Nanotechnology Excellence' => 'nanotech_nci1=1',
+                'NHLBI Program of Excellence in Nanotechnology' => 'nanotech_nhlbi1=1',
+            )
+        ),
+        '232'=>array(
+            'filters'=>array(
+                'Bioinformatics' => 'network_membership___5=1 OR network_membership___18=1',
+                'Cardiology' => 'network_membership___27=1',
+                'Clinical trials' => 'network_membership___0=1 OR network_membership___1=1 OR network_membership___3=1 OR network_membership___4=1 OR network_membership___8=1 OR network_membership___12=1 OR network_membership___13=1 OR network_membership___14=1 OR network_membership___16=1 OR network_membership___17=1 OR network_membership___19=1 OR network_membership___22=1 OR network_membership___23=1 OR network_membership___26=1 OR network_membership___27=1 OR network_membership___30=1 OR network_membership___31=1 OR network_membership___33=1 OR network_membership___35=1 OR network_membership___36=1',
+                'CNS diseases' => 'network_membership___23=1 OR network_membership___26=1',
+                'Drug discovery and development' => 'network_membership___11=1 OR network_membership___16=1 OR network_membership___18=1',
+                'Endocrinology' => 'network_membership___14=1',
+                'Genetic diseases' => 'network_membership___6=1 OR network_membership___15=1 OR network_membership___24=1 OR network_membership___30=1',
+                'Hematology' => 'network_membership___10=1 OR network_membership___35=1',
+                'Immunodeficiency disorders' => 'network_membership___16=1',
+                'Pediatrics/neonatology' => 'network_membership___12=1 OR network_membership___17=1 OR network_membership___22=1 OR network_membership___24=1 OR network_membership___26=1 OR network_membership___27=1 OR network_membership___28=1 OR network_membership___37=1',
+                'Pharmacogenomics' => 'network_membership___15=1 OR network_membership___28=1 OR network_membership___29=1',
+                'Practice based research' => 'network_membership___2=1 OR network_membership___21=1 OR network_membership___25=1 OR network_membership___37=1',
+                'Pulmonary/ respiratory diseases' => 'network_membership___0=1 OR network_membership___3=1 OR network_membership___4=1 OR network_membership___13=1',
+                'Oncology' => 'network_membership___6=1 OR network_membership___7=1 OR network_membership___8=1 OR network_membership___9=1 OR network_membership___11=1 OR network_membership___19=1 OR network_membership___20=1 OR network_membership___26=1 OR network_membership___33=1 OR network_membership___34=1',
+                'Radiology' => 'network_membership___1=1',
+                'Rare Disease' => 'network_membership___30=1 OR network_membership___31=1',
+                'Urology' => 'network_membership___36=1',
+            )
+        ),
+        '274'=>array(
+            'filters'=>array(
+                'Argonne National Laboratory' => 'nonnihpartner_name___0=1',
+                'Kaiser Permanente, Atlanta, GA' => 'nonnihpartner_name___1=1',
+                'Lawrence Livermore National Laboratory' => 'nonnihpartner_name___2=1',
+                'Los Alamos National Laboratory' => 'nonnihpartner_name___3=1',
+                'National Emerging Infectious Diseases Laboratory' => 'nonnihpartner_name___4=1',
+                'Oak Ridge National Laboratory' => 'nonnihpartner_name___5=1',
+                'Sandia National Laboratories' => 'nonnihpartner_name___6=1',
+            )
+        ),
+        '87'=>array(
+            'filters'=>array(
+                'Available on rolling basis' => 'pilotfunds_schedule___0=1',
+                'Available on fixed dates' => 'pilotfunds_schedule___1=1',
+                'Available on ad hoc basis' => 'pilotfunds_schedule___2=1',
+                'Outcome tracking mechanisms' => 'pilotfunds_outcomes=1',
+                'Maximum award value &ge; $75,000' => 'pilotfunds_maxvalue_no=1',
+                'Minimum award value &le; $5,000' => 'pilotfunds_minvalue_no=1',
+                'Total amount of annual funding &ge; $700,000' => 'pilotfunds_totalamount_no=1',
+                'Total annual awards &ge; 15' => 'pilotfunds_totalnumber_no=1',
+                'Faculty eligibility' => 'pilotfunds_eligibleparties___0=1',
+                'CTSA member eligibility' => 'pilotfunds_eligibleparties___1=1',
+                'Medical student eligibility' => 'pilotfunds_eligibleparties___2=1',
+                'Undergraduate eligibility' => 'pilotfunds_eligibleparties___3=1',
+                'Graduate student eligibility' => 'pilotfunds_eligibleparties___4=1',
+                'Community organization eligibility' => 'pilotfunds_eligibleparties___5=1',
+                'Standing review committee' => 'pilotfunds_peerreviewcomm=0',
+                'Ad hoc review committee' => 'pilotfunds_peerreviewcomm=1',
+                'Consultations for resubmission' => 'pilotfunds_consults=1',
+                'CRU resources inlcuded in award' => 'pilotfunds_crc=0',
+                'Accepts applications for any disease area' => 'pilotfunds_diseasefocus=0',
+            )
         ),
       
     );
@@ -1640,7 +1721,7 @@ function cataloging_createFilters($projectsArray,$ajax=TRUE)
 
                     $sql = "SELECT COUNT(DISTINCT $institution_field) as 'site_count'
                             FROM $table WHERE ".$siteCountWHERE;
-                        
+//                    print("<br>".$sql);
 //                    $result = mysql_query($sql);
 //                    if (!$result) {
 //                        die('<br>Invalid DISTINCT query: ' . mysql_error());
