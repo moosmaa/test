@@ -1,0 +1,489 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <title>TIPQC NAS Report</title>
+    <style type="text/css">
+      @media print{@page {size: landscape}}
+      .page-break-after { page-break-after: always }
+      h1 { font-size: 2em }
+      h2 { font-size: 1em }
+      h3 { font-size: 1em; font-weight: normal; text-decoration: underline }
+      li { margin-bottom: 5px; }
+      .section { margin-top: 20px; }
+      .subsection { margin-bottom: 20px; }
+    </style>
+  </head>
+<body>
+
+<!-- ###################################################################################   -->
+<!-- ###################################################################################   -->
+<!-- ###################################################################################   -->
+
+<center>
+   <h1>- TIPQC Neonatal Abstinence Syndrome (NAS) Report -</h1>
+   <%=
+      format(Sys.time(), "%B %d, %Y %I:%M %p", usetz = TRUE)
+   %>
+</center>
+<%
+    # set functions
+    source("xbar.one.function.R")	
+%>
+
+<!-- ###################################################################################   -->
+<!-- ###################################################################################   -->
+<!-- ###################################################################################   -->
+
+<%
+thisreport <- Sys.Date()   # should be the date the report is requested
+pilot_startdate <- as.Date("2012-09-01")
+
+#############################################################################
+# Pull out one hospital's data --> referenced using USER_GROUP_ID object
+if(USER != "state_user") {
+   subdata <- subset(data, study_id %in% grep(paste("^", USER_GROUP_ID, "-", sep = ""),
+      data$study_id, value = TRUE))
+}
+if(USER == "state_user") {
+   # Exclude Lake WBG data!
+   subdata <- subset(data, study_id %in% setdiff(data$study_id, grep("^56-", data$study_id, value = TRUE)))
+}
+
+#############################################################################
+# Format some data variables
+##  --> NOTE: focusing on doadmin, not dob
+subdata$doadmin <- as.Date(subdata$doadmin)
+subdata$date_discharge <- as.Date(subdata$date_discharge)
+
+#############################################################################
+# Drop specific records
+# (1) doadmin < pilot_startdate
+# (2) doadmin > thisreport
+# (3) date_discharge < pilot_startdate
+# (4) date_dischare > thisreport
+# (5) date_discharge < doadmin
+
+# First... store any excluded records
+excluded <- subset(subdata, is.na(doadmin) |
+   doadmin < pilot_startdate | doadmin > thisreport |
+   date_discharge < pilot_startdate | date_discharge > thisreport | 
+   date_discharge < doadmin,
+   select = c(study_id, doadmin, date_discharge))
+# Add flags to indicate whether doadmin and/or date_discharge is the problem
+excluded$doadmin_flag <- ifelse(is.na(excluded$doadmin) | excluded$doadmin < pilot_startdate | 
+   excluded$doadmin > thisreport, "doadmin", NA)
+excluded$date_discharge_flag <- ifelse(excluded$date_discharge < pilot_startdate | 
+   excluded$date_discharge > thisreport, "date_discharge", NA)
+excluded$neglos_flag <- ifelse(excluded$date_discharge < excluded$doadmin, "neglos", NA)
+   
+# Now, drop these "problem" records
+subdata <- subset(subdata, !is.na(doadmin))
+subdata <- subset(subdata, doadmin >= pilot_startdate & doadmin <= thisreport)
+subdata <- subset(subdata, is.na(date_discharge) | date_discharge >= pilot_startdate)
+subdata <- subset(subdata, is.na(date_discharge) | date_discharge < thisreport)
+subdata <- subset(subdata, is.na(date_discharge) | date_discharge >= doadmin)
+
+if(nrow(subdata) > 0) {
+#############################################################################
+# Add some needed variables
+subdata$admin_month <- format.Date(subdata$doadmin, "%m/%y")
+subdata$discharge_month <- format.Date(subdata$date_discharge, "%m/%y")
+subdata$discharge_month <- factor(subdata$discharge_month,
+   levels = format.Date(seq.Date(from = pilot_startdate,
+      to = thisreport, by = "month"), "%m/%y"))
+subdata$los <- as.numeric(subdata$date_discharge - subdata$doadmin)
+
+#############################################################################
+# Aggregate the data 
+dataper <- data.frame(month = format.Date(seq.Date(from = pilot_startdate,
+   to = thisreport, by = "month"), "%m/%y"), stringsAsFactors = FALSE)
+dataper$month <- factor(dataper$month, levels = unique(dataper$month),
+   ordered = TRUE)
+
+# Calculate the number of babies admitted each month
+junk <- data.frame(table(subdata$admin_month))
+names(junk) <- c("month", "n_admin")
+dataper <- merge(dataper, junk, by = "month", all = TRUE)
+dataper <- dataper[order(dataper$month),]
+rm(junk)
+
+# Calculate the number of babies discharged each month
+junk <- data.frame(table(subdata$discharge_month))
+names(junk) <- c("month", "n_discharge")
+dataper <- merge(dataper, junk, by = "month", all = TRUE)
+dataper <- dataper[order(dataper$month),]
+rm(junk)
+
+# Calculate the number of babies admitted each month who still have a missing month of discharge
+junk <- data.frame(table(subset(subdata, is.na(discharge_month))$admin_month))
+names(junk) <- c("month", "n_na_dod")
+dataper <- merge(dataper, junk, by = "month", all = TRUE)
+dataper <- dataper[order(dataper$month),]
+rm(junk)
+
+#############################################################################
+# Group ID and counts for state_user
+subdata$clinic <- gsub("([0-9]+)-[0-9]+", "\\1", subdata$study_id)
+if(USER == "state_user") {
+   junk <- with(subdata, aggregate(x = clinic, by = list(admin_month), 
+      FUN = function(w) { length(unique(w))}))   
+   names(junk) <- c("month", "ngroups")
+   dataper <- merge(dataper, junk, by = "month", all = TRUE)
+   rm(junk)
+}
+
+#############################################################################
+# Sort dataper
+   dataper <- dataper[order(dataper$month),]
+}
+
+%>
+
+<!-- ###################################################################################   -->
+<!-- ###################################################################################   -->
+<!-- ###################################################################################   -->
+
+<br/>
+<center>
+<p>
+ <big> - <b>IMPORTANT</b> - </big>
+ <br/>
+ <em>This report is based on the most current information available in the REDCap database.</em>
+ <br/>
+ <em>There may be a lag in data entry (see below) and/or data entry errors that may cause discrepancies.</em>
+</p>
+</center>
+<br/>
+
+<!-- ###################################################################################   -->
+<!-- ###################################################################################   -->
+<!-- ###################################################################################   -->
+
+<ol>
+<li class="section page-break-after"><h2>REPORT SUMMARY</h3>
+   <ul>
+   <li> As of "today" (<%= format(thisreport, format = "%B %d, %Y") %>), <%= nrow(subdata) + nrow(excluded) %> records 
+      have been saved in REDCap for your group.</li>
+   <li> Of these records, <%= nrow(subdata) %> have a date of admission that falls between 
+      the 'pilot start date' (<%= format(pilot_startdate, format = "%B %d, %Y") %>) 
+      and 'today' (<%= format(thisreport, format = "%B %d, %Y") %>). </li>
+   <li> Of those records, <%= nrow(subset(subdata, !is.na(date_discharge))) %> also have a 
+      date of discharge that falls between 
+      the 'pilot start date' (<%= format(pilot_startdate, format = "%B %d, %Y") %>) 
+      and 'today' (<%= format(thisreport, format = "%B %d, %Y") %>). </li>
+    <li> As of "today" (<%= format(thisreport, format = "%B %d, %Y") %>), there are <%= nrow(subset(subdata,is.na(subdata$date_discharge))) + nrow(subset(excluded,is.na(excluded$date_discharge))) %> infants in REDCap who have not been discharged. </li>
+   </ul>
+</li>
+   
+<!-- ###################################################################################   -->
+<!-- ###################################################################################   -->
+<!-- ###################################################################################   -->
+
+<li class="section page-break-after"><h2>DATA ENTRY CHECKS</h3>
+   <ul>
+   <%
+      if(USER != "state_user") {
+         cat("<li>Record(s) with a date of admission that is (1) missing, (2) occuring before the 'pilot start date', or 
+            (3) occuring after 'today':\n<p>")
+         if(nrow(subset(excluded, doadmin_flag == "doadmin")) == 0) cat("No problems identified") 
+         if(nrow(subset(excluded, doadmin_flag == "doadmin")) > 0) {
+            junk <- subset(excluded, doadmin_flag == "doadmin", select = c(study_id, doadmin))
+            junk$doadmin <- as.character(junk$doadmin)
+            names(junk) <- c("Study ID", "Date of Admission")
+            print(xtable(junk, align = c("c", "c", "r")), type = "html", include.rownames = FALSE)
+            rm(junk)
+         }       
+         cat("</p></li>")
+            
+         cat("<li>Record(s) with a date of discharge that is (1) occuring before the 'pilot start date', or 
+            (2) occuring after 'today':\n<p>")
+         if(nrow(subset(excluded, date_discharge_flag == "date_discharge")) == 0) cat("No problems identified") 
+         if(nrow(subset(excluded, date_discharge_flag == "date_discharge")) > 0) {
+            junk <- subset(excluded, date_discharge_flag == "date_discharge", select = c(study_id, date_discharge))
+            junk$date_discharge <- as.character(junk$date_discharge)
+            names(junk) <- c("Study ID", "Date of Discharge")
+            print(xtable(junk, align = c("c", "c", "r")), type = "html", include.rownames = FALSE)
+            rm(junk)
+         }       
+         cat("</p></li>")
+
+         cat("<li>Record(s) with a date of discharge occuring before the date of admission:\n<p>")       
+         if(nrow(subset(excluded, neglos_flag == "neglos")) == 0) cat("No problems identified") 
+         if(nrow(subset(excluded, neglos_flag == "neglos")) > 0) {
+            junk <- subset(excluded, neglos_flag == "neglos", select = c(study_id, doadmin, date_discharge))
+            junk$doadmin <- as.character(junk$doadmin)          
+            junk$date_discharge <- as.character(junk$date_discharge)
+            names(junk) <- c("Study ID", "Date of Admission", "Date of Discharge")
+            print(xtable(junk, align = c("c", "c", "r", "r")), type = "html", include.rownames = FALSE)
+            rm(junk)
+         }       
+         cat("</p></li>")
+      }
+      if(USER == "state_user") {
+         cat("<li>Record(s) with a date of admission that is (1) missing, (2) occuring before the 'pilot start date'
+            or (3) occuring after 'today':\n<p>N = ", nrow(subset(excluded, doadmin_flag == "doadmin")), "</p></li>")
+         cat("<li>Record(s) with a date of discharge that is (1) occuring before the 'pilot start date', or 
+            (2) occuring after 'today':\n<p>N = ", nrow(subset(excluded, date_discharge_flag == "date_discharge")), "</p></li>")
+         cat("<li>Record(s) with a date of discharge occuring before the date of admission:\n<p>N = ",
+              nrow(subset(excluded, neglos_flag == "neglos")), "</p></li>")       
+      }
+   %>   
+   </ul>
+</li>
+
+<!-- ###################################################################################   -->
+<!-- ###################################################################################   -->
+<!-- ###################################################################################   -->
+
+<li class="section page-break-after"><h2>NUMBER OF CASES CAPTURED PER MONTH</h3>
+
+<%
+if(exists("dataper") == FALSE) {
+   cat("<p>IMPORTANT: This figure will not generate until you resolve your 'DATA ENTRY CHECKS'.</p>")
+}
+
+if(exists("dataper")) {
+png("ncases.png", units = "in", height = 6, width = 9, res = 96, pointsize = 14)
+
+par(mar = c(4, 4, 1.5, 1)+0.1, las = 1, mgp = c(2.25, 0.75, 0))
+plot(x = as.numeric(dataper$month), xlim = c(0.75, nrow(dataper)+0.25), xlab = "",
+     y = dataper$n_admin, ylim = c(0, max(dataper$n_admin, na.rm = TRUE)), ylab = "No. NAS infants admitted",
+     axes = FALSE, type = "n", font.lab = 2)
+axis(side = 2, cex.axis = 0.5)
+par(mgp = c(1.5, 0.5, 0))
+axis(side = 1, cex.axis = 0.5, 
+   at = as.numeric(dataper$month), labels = as.character(dataper$month))
+title(xlab = "Month", font.lab = 2)
+
+points(x = as.numeric(dataper$month), y = dataper$n_admin, type = "b")
+
+mtext(side = 1, text = "No. NAS infants admitted:", 
+   at = 0.25, adj = 0, line = 2.0, font = 2, cex = 0.5)
+axis(side = 1, line = 2.0, at = as.numeric(dataper$month), labels = dataper$n_admin, tick = FALSE, cex.axis = 0.5)
+
+if(USER == "state_user") {
+   mtext(side = 3, text = "No. groups contributing data:", at = 0.25, adj = 0, line = 0.6,
+      font = 4, cex = 0.45)
+   axis(side = 3, line = -0.5, tick = FALSE, at = dataper$month, 
+   labels = dataper$ngroups, cex.axis = 0.5, font = 4)
+}
+
+box()
+box("figure")
+dev.off()
+}
+%>
+
+<center>
+   <img src="ncases.png" />
+</center>
+
+</li>
+
+
+<!-- ###################################################################################   -->
+<!-- ###################################################################################   -->
+<!-- ###################################################################################   -->
+
+<li class="section page-break-after"><h2>DISTRIBUTION OF LENGTH OF STAY (LOS)</h3>
+
+<%
+if(nrow(subdata) == 0) {
+   cat("<p>IMPORTANT: This figure will not generate until you resolve your 'DATA ENTRY CHECKS'.</p>")
+}
+
+if(nrow(subdata) > 0) {
+cat("<p> In the following side-by-side boxplot, the raw values of LOS in each month are overlaid on top of the corresponding summary boxplot.  A small amount of 'noise' has been added to the raw LOS values in the horizontal direction in order to distinguish multiple infants with the same LOS in the same month.  Lastly, the width of each boxplot is proportional to the number of NAS infants discharged in each month.</p>") 
+
+png("los.png", units = "in", height = 6, width = 9, res = 96, pointsize = 14)
+
+par(mar = c(5.5, 4, 1.5, 1)+0.1, las = 1, mgp = c(2.25, 0.75, 0))
+boxplot(los ~ discharge_month, data = subdata,
+   varwidth = TRUE, cex.axis = 0.5, ylim = range(subdata$los, na.rm = TRUE), outline = FALSE)
+title(ylab = "Length of stay (LOS; in days)", font.lab = 2)
+par(mgp = c(1.5, 0.5, 0))
+title(xlab = "Month", font.lab = 2)
+
+with(subdata,
+   stripchart(los ~ discharge_month, add = TRUE,
+      vertical = TRUE, method = "jitter", pch = 1)
+)
+   
+mtext(side = 1, text = "No. NAS infants discharged:", 
+   at = 0.25, adj = 0, line = 2.0, font = 2, cex = 0.5)
+axis(side = 1, line = 2.0, at = as.numeric(dataper$month), labels = dataper$n_discharge, tick = FALSE, cex.axis = 0.5)
+mtext(side = 1, text = "No. NAS infants admitted during month, but not yet discharged:", 
+   at = 0.25, adj = 0, line = 3.5, font = 2, cex = 0.5)
+axis(side = 1, line = 3.5, at = as.numeric(dataper$month), labels = dataper$n_na_dod, tick = FALSE, cex.axis = 0.5)
+
+if(USER == "state_user") {
+   mtext(side = 3, text = "No. groups contributing data:", at = 0.25, adj = 0, line = 0.6,
+      font = 4, cex = 0.45)
+   axis(side = 3, line = -0.5, tick = FALSE, at = dataper$month, 
+   labels = dataper$ngroups, cex.axis = 0.5, font = 4)
+}
+
+box()
+box("figure")
+dev.off()
+}
+%>
+
+<center>
+   <img src="los.png" />
+</center>
+
+</li>
+
+<!-- ###################################################################################   -->
+<!-- ###################################################################################   -->
+<!-- ###################################################################################   -->
+
+<li class="section">
+    <h2>STATISTICAL PROCESS CONTROL CHART OF LENGTH OF STAY (LOS)</h2> 
+        <%
+            if(nrow(subdata) == 0) {
+                cat("<p>IMPORTANT: This figure will not generate until you resolve your 'DATA ENTRY CHECKS'.</p>")
+             } else {
+                junk <- subset(subdata, select = c(study_id, clinic, doadmin, los,date_discharge))
+                junk$record <- as.numeric(gsub("[0-9a-zA-Z]+-", "", subdata$study_id))
+                junk$clinic <- as.numeric(junk$clinic)
+                
+                # Sort --> by doadmin, record, clinic
+                junk <- junk[order(junk$doadmin, junk$record, junk$clinic), ]
+
+                # format doadmin
+                junk$doadmin = format(as.Date(as.character(junk$doadmin),format="%Y-%m-%d"),"%m/%d/%y")
+              
+                # label los
+                label(junk$los)="Length of Stay (LOS)"
+
+                
+                xbarI_section(junk,USER,'los','doadmin')
+                
+                
+                
+                # ADD RECENT DATA CHART WITH OPEN CIRCLES
+                # if los=NA, calculate los to date
+                localdata = junk
+                localdata[is.na(localdata$los),'los'] = as.numeric(Sys.Date() - as.Date(as.character(localdata[is.na(localdata$los),'doadmin']),format="%m/%d/%y"))
+                
+                
+
+                mostRecentData = xbarI_plot2_formatData(localdata,'los','doadmin')
+
+                if(nrow(mostRecentData$qdata) == 0) {
+                     cat("<p>IMPORTANT: This figure will not generate until you have entered records in to REDCap with a date of admission between ", format(as.Date(mostRecentData$monthLabels[4]),"%b")," - ", format(Sys.Date(),"%b %d, %Y"),".</p>")
+                } else{
+                    cat("<p>The following figure is an SPC chart for the most recent LOS data. Open circles indicate infants that have not been discharged. The statistics in the chart (Center, StdDev, LCL and UCL) are calculated based on discharged infants that were admitted between ", mostRecentData$plotDividerLabels[1],
+                        ". ",
+                        "In the margin, 'No. infants discharged' is the total number of infants with an admission date between ", format(as.Date(mostRecentData$monthLabels[4]),"%b")," - ",format(Sys.Date(),"%b %d, %Y")," that have been discharged.",
+                        "'Number beyond limits' includes all infants admitted between ",format(as.Date(mostRecentData$monthLabels[4]),"%b") ," - ", format(Sys.Date(),"%b %d, %Y") ," even if not yet discharged.", 
+                        "'Number violating runs' includes all infants admitted between ", format(as.Date(mostRecentData$monthLabels[4]),"%b")," - ", format(Sys.Date(),"%b %d, %Y") ," EXCEPT for infants not yet discharged where LOS &lt; Center CL.</p>",
+                        "<center>
+                            <img src='xbarchart_recentData.png' />
+                        </center>")
+
+                    localdata = subset(localdata,as.Date(as.character(junk$doadmin),format="%m/%d/%y")>=as.Date(mostRecentData$monthLabels[4]))
+                    rownames(localdata)=1:nrow(localdata)
+
+                    # set up plot appropriate for width of local data
+                    indices = 1:nrow(localdata)
+                    rownames(localdata) = indices
+                    indcs <- c(indices - 1/2, max(indices) + 1/2)
+
+                    png('xbarchart_recentData.png', height=480,width=850, res = 96, pointsize = 10)		
+                        par("mar"=c(5, 4, 4, 2) + 0.1+c(6, 0,0,0),"bg"  = "lightgray")
+                        plot(indices,localdata$los,type="n",ylim=c(0,80),xlim=range(indcs),xlab="Record",ylab="LOS (days)",main="Length of Stay (LOS) - Data From Jan 2013 to Present",xaxt = 'n')
+
+                        # add white box to be plotted on
+                          rect(par("usr")[1], par("usr")[3], par("usr")[2], par("usr")[4], 
+                               col = "white")
+                        # add x axis
+                        axis(side=1,at=indices)
+                        # plot on box
+                        lines(indices, localdata$los, type = "c", cex=.8) 
+                        points(subset(indices,!is.na(localdata$date_discharge)), subset(localdata$los,!is.na(localdata$date_discharge)),type="p",pch=16,cex=.8)
+                        points(subset(indices,is.na(localdata$date_discharge)), subset(localdata$los,is.na(localdata$date_discharge)),type="p",pch=21,cex=.9)
+                        qcc_xbar_one_plot_elements(localdata,1)
+                    dev.off()
+             
+                }
+                
+               
+                
+            }
+             
+             
+        %>    
+                
+        
+</li>
+<%
+    # ADD LOCAL DATA VS STATE MINUS LOCAL CHART
+    if(USER!='state_user' && nrow(subdata) != 0 && nrow(junk!=0) ){
+        cat("<li class='section'>
+                <h2>LOCAL LOS COMPARED TO REMAINDER OF STATE AGGREGATE LOS</h2>")
+        data$clinic <- gsub("([0-9]+)-[0-9]+", "\\1", data$study_id)
+        # Format some data variables
+        ##  --> NOTE: focusing on doadmin, not dob
+       data$doadmin <- as.Date(data$doadmin)
+       data$date_discharge <- as.Date(data$date_discharge)
+        # Now, drop these "problem" records
+       data <- subset(data, !is.na(doadmin))
+       data <- subset(data, doadmin >= pilot_startdate & doadmin <= thisreport)
+       data <- subset(data, !is.na(date_discharge))
+       data <- subset(data, date_discharge >= pilot_startdate)
+       data <- subset(data, date_discharge < thisreport)
+       data <- subset(data, date_discharge >= doadmin)
+
+        #############################################################################
+        # Add some needed variables
+        data$admin_month <- format.Date(data$doadmin, "%m/%y")
+        data$discharge_month <- format.Date(data$date_discharge, "%m/%y")
+        data$discharge_month <- factor(data$discharge_month,
+           levels = format.Date(seq.Date(from = pilot_startdate,
+              to = thisreport, by = "month"), "%m/%y"))
+        data$los <- as.numeric(data$date_discharge - data$doadmin)
+        data$record <- as.numeric(gsub("[0-9a-zA-Z]+-", "", data$study_id))
+        #############################################################################
+        # state minus local data
+        stateData = subset(data, study_id %in% setdiff(data$study_id, grep("^56-", data$study_id, value = TRUE))) # Exclude Lake WBG data!
+        stateData = subset(stateData, study_id %in% setdiff(stateData$study_id, grep(paste("^", USER_GROUP_ID, "-", sep = ""),stateData$study_id, value = TRUE)))
+        stateData = subset(stateData, !is.na(stateData$los),select=c('study_id','clinic','doadmin','los','date_discharge','record'))
+        localData = subset(junk,!is.na(junk$los))
+        # set up plot appropriate for width of local data
+        indices = 1:nrow(localData)
+        indcs <- c(indices - 1/2, max(indices) + 1/2)
+        png('xbarchart_localVSstate.png', height=480,width=850, res = 96, pointsize = 10)
+            par("mar"=c(5, 4, 4, 2) + 0.1+c(6, 0,0,0),"bg"  = "lightgray")
+            plot(indices,localData$los,type="n",ylim=c(0,80),xlim=range(indcs),xlab="Record",ylab="LOS (days)",main="Length of Stay (LOS) - Local vs State",xaxt = 'n')
+            #plot(allplotdata,type="b",pch=16,cex=.7,ylim=c(0,200),main="Age IV Solution Started (Minutes of Life)",xlab="Record",ylab="Minutes of Life")
+            # add white box to be plotted on
+              rect(par("usr")[1], par("usr")[3], par("usr")[2], par("usr")[4], 
+                   col = "white")
+            # add x axis
+            axis(side=1,at=indices)
+            # plot on box
+            lines(indices, localData$los, type = "b", pch=20) 
+            qcc_xbar_one_plot_elements_state_parameters(localData$los,stateData$los,1)
+       dev.off()
+       cat("<p>The following figure is a statistical process control (SPC) chart for your center's Length of Stay (LOS) data as compared to state data statistics. Your center's data is excluded in the calculation of the state data statistics.</p>",
+            "<center>
+                <img src='xbarchart_localVSstate.png' />
+            </center>
+            </li>")
+    }else if(USER!='state_user'){
+        cat("<p>IMPORTANT: This figure will not generate until you resolve your 'DATA ENTRY CHECKS'.</p>")
+    }
+%>
+
+
+</ol>
+
+
+   
+</body>
+
+</html>
