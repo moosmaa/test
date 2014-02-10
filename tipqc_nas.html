@@ -117,8 +117,13 @@ rm(junk)
 
 # Calculate the number of babies admitted each month who still have a missing month of discharge
 junk <- data.frame(table(subset(subdata, is.na(discharge_month))$admin_month))
-names(junk) <- c("month", "n_na_dod")
-dataper <- merge(dataper, junk, by = "month", all = TRUE)
+if(nrow(junk) == 0) {
+   dataper$n_na_dod <- 0
+}
+if(nrow(junk) > 0) {
+   names(junk) <- c("month", "n_na_dod")
+   dataper <- merge(dataper, junk, by = "month", all = TRUE)
+}
 dataper <- dataper[order(dataper$month),]
 rm(junk)
 
